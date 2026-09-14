@@ -1,6 +1,9 @@
 import "dotenv/config";
 import bcrypt from "bcryptjs";
 import Database from "better-sqlite3";
+import fs from "node:fs";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
 
 const password = process.env.ADMIN_PASSWORD;
 if (!password) {
@@ -8,7 +11,10 @@ if (!password) {
   process.exit(1);
 }
 
-const db = new Database("plainly.db");
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const dataDir = path.resolve(process.env.DATA_DIR || __dirname);
+fs.mkdirSync(dataDir, { recursive: true });
+const db = new Database(path.join(dataDir, "plainly.db"));
 db.exec(`
   CREATE TABLE IF NOT EXISTS users (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
