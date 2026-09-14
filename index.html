@@ -1,0 +1,496 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Daniblog</title>
+  <style>
+    :root {
+      --blue:#4285f4; --blue-dark:#3367d6; --text:#424242; --muted:#757575;
+      --line:#e0e0e0; --page:#f5f5f5; --white:#fff; --red:#c62828;
+    }
+    * { box-sizing:border-box; }
+    body { margin:0; background:var(--page); color:var(--text); font-family:Arial,Roboto,Helvetica,sans-serif; font-size:14px; line-height:1.5; }
+    .topbar { height:50px; background:var(--white); border-bottom:1px solid #d5d5d5; box-shadow:0 1px 2px rgba(0,0,0,.08); }
+    .topbar-inner { height:100%; max-width:980px; margin:0 auto; padding:0 18px; display:flex; align-items:center; justify-content:space-between; }
+    .brand { display:flex; align-items:center; gap:10px; color:#555; text-decoration:none; }
+    .logo { width:30px; height:30px; display:block; object-fit:contain; border-radius:4px; }
+    .brand-name { font-size:16px; }
+    .login, .account-button { border:1px solid #d6d6d6; background:#fff; color:#555; padding:6px 13px; font-size:13px; cursor:pointer; box-shadow:0 1px 1px rgba(0,0,0,.05); }
+    .login:hover, .account-button:hover { background:#f5f5f5; }
+    .account { position:relative; }
+    .account-menu { display:none; position:absolute; right:0; top:38px; min-width:150px; background:#fff; border:1px solid #ccc; box-shadow:0 2px 8px rgba(0,0,0,.18); z-index:30; }
+    .account-menu.open { display:block; }
+    .account-menu button { width:100%; border:0; background:#fff; padding:10px 13px; text-align:left; cursor:pointer; color:#555; font-size:13px; }
+    .account-menu button:hover { background:#f5f5f5; }
+    .account-menu .danger { color:var(--red); }
+    .page { width:min(760px,calc(100% - 32px)); margin:0 auto; padding:42px 0 65px; }
+    .site-heading { background:#fff; border:1px solid var(--line); padding:28px 30px; margin-bottom:24px; }
+    .site-heading h1 { margin:0 0 7px; color:#333; font-size:29px; line-height:1.2; font-weight:400; }
+    .site-heading p { margin:0; color:var(--muted); }
+    .posts { display:flex; flex-direction:column; gap:10px; }
+    .post-button { display:block; width:100%; background:#fff; border:1px solid var(--line); padding:17px 20px; text-align:left; text-decoration:none; color:inherit; cursor:pointer; }
+    .post-button:hover { border-color:#bdbdbd; box-shadow:0 1px 3px rgba(0,0,0,.09); }
+    .post-title { display:block; color:#333; font-size:16px; font-weight:500; margin-bottom:3px; }
+    .post-description { display:block; color:var(--muted); font-size:13px; }
+    .post-date { display:block; color:#999; font-size:11px; margin-top:7px; }
+    .post-meta { display:flex; align-items:center; gap:10px; margin-top:7px; color:#999; font-size:11px; }
+    .comment-count { color:var(--blue); }
+    footer { color:#999; text-align:center; font-size:11px; padding:20px; }
+
+    .overlay { display:none; position:fixed; inset:0; background:rgba(0,0,0,.25); align-items:flex-start; justify-content:center; padding:50px 15px; z-index:20; overflow:auto; }
+    .overlay.open { display:flex; }
+    .login-box, .dashboard-box, .editor-box { width:min(900px,100%); background:#fff; border:1px solid #ccc; box-shadow:0 2px 8px rgba(0,0,0,.2); padding:25px; }
+    .login-box { width:min(380px,100%); }
+    .box-head { display:flex; align-items:center; justify-content:space-between; gap:15px; margin-bottom:15px; }
+    h2 { margin:0; font-size:20px; font-weight:400; color:#333; }
+    .close { border:0; background:none; color:#777; font-size:20px; cursor:pointer; }
+    label { display:block; color:#555; font-size:12px; margin:13px 0 5px; }
+    input, textarea { width:100%; border:1px solid #ccc; padding:8px 9px; outline:none; font:inherit; }
+    input { height:35px; }
+    textarea { min-height:320px; resize:vertical; line-height:1.55; }
+    input:focus, textarea:focus { border-color:var(--blue); box-shadow:0 0 0 1px var(--blue); }
+    .actions { display:flex; justify-content:flex-end; gap:9px; margin-top:18px; }
+    .actions button, .tab { border:1px solid #d0d0d0; background:#fff; color:#555; padding:7px 14px; cursor:pointer; font-size:13px; }
+    .actions .primary, .tab.active { background:var(--blue); border-color:var(--blue); color:#fff; }
+    #newArticleButton { border:1px solid #d0d0d0; background:#fff; color:#555; padding:7px 14px; cursor:pointer; font-size:13px; }
+    #newArticleButton:hover { background:#f5f5f5; border-color:#bdbdbd; }
+    .message { color:var(--muted); font-size:11px; margin-top:10px; min-height:16px; }
+    .dashboard-toolbar { display:flex; justify-content:space-between; align-items:center; margin-bottom:14px; gap:10px; }
+    .article-row, .user-row { display:flex; align-items:center; gap:10px; border:1px solid var(--line); padding:10px; margin-bottom:8px; background:#fff; }
+    .row-title { flex:1; min-width:0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+    .row-actions { display:flex; gap:6px; }
+    .row-actions button { border:1px solid #d0d0d0; background:#fff; padding:5px 9px; cursor:pointer; font-size:12px; }
+    .row-actions .delete { color:var(--red); }
+    .tabs { display:flex; gap:6px; border-bottom:1px solid var(--line); margin:10px 0 18px; padding-bottom:8px; }
+    .help { color:var(--muted); font-size:12px; margin-top:5px; }
+    .rendered { margin-top:18px; border-top:1px solid var(--line); padding-top:18px; }
+    .rendered img { max-width:100%; height:auto; display:block; margin:12px 0; }
+    .rendered h1,.rendered h2,.rendered h3 { color:#333; }
+    .rendered code { background:#f1f1f1; padding:2px 4px; }
+    .comments-section { margin-top:18px; background:#fff; border:1px solid var(--line); padding:24px 30px; }
+    .comments-section h2 { margin:0 0 15px; font-size:20px; font-weight:400; color:#333; }
+    .comment { border-top:1px solid var(--line); padding:14px 0; }
+    .comment:first-child { border-top:0; padding-top:0; }
+    .comment-meta { display:flex; align-items:center; gap:8px; margin-bottom:5px; font-size:11px; color:#999; }
+    .comment-user { color:#555; font-weight:bold; }
+    .comment-body { color:#424242; white-space:pre-wrap; overflow-wrap:anywhere; }
+    .comment-delete { margin-left:auto; border:0; background:none; color:var(--red); cursor:pointer; font-size:11px; padding:0; }
+    .comment-delete:hover { text-decoration:underline; }
+    .comment-form { margin-top:18px; padding-top:18px; border-top:1px solid var(--line); }
+    .comment-form textarea { width:100%; min-height:100px; box-sizing:border-box; resize:vertical; border:1px solid #ccc; padding:8px 9px; outline:none; font:inherit; }
+    .comment-form button { margin-top:8px; border:1px solid #d0d0d0; background:#fff; color:#555; padding:7px 14px; cursor:pointer; font-size:13px; }
+    .comment-form button:hover { background:#f5f5f5; }
+    .comment-login-note { color:var(--muted); font-size:12px; }
+    @media(max-width:600px) {
+      .page { padding-top:25px; }
+      .site-heading { padding:22px; }
+      .site-heading h1 { font-size:25px; }
+      .article-row,.user-row { align-items:flex-start; flex-direction:column; }
+      .row-actions { width:100%; }
+    }
+  </style>
+</head>
+<body>
+<header class="topbar">
+  <div class="topbar-inner">
+    <a class="brand" href="/"><img class="logo" src="https://github.com/danieltorres-mhcs/assets/blob/main/Untitled27_20260914211220.png?raw=true" alt="Daniblog logo"><span class="brand-name">Daniblog</span></a>
+    <div class="account">
+      <button class="login" id="authButton">Log in</button>
+      <div class="account-menu" id="accountMenu">
+        <button id="dashboardButton">Dashboard</button>
+        <button class="danger" id="logoutButton">Log out</button>
+      </div>
+    </div>
+  </div>
+</header>
+
+<main class="page">
+  <section class="site-heading">
+    <h1>Daniblog</h1>
+    <p>blog site for news, thoughts, and opinions. contact me on any link from <a href="https://dani.devs.surf" target="_blank"</a> for an account.</p>
+  </section>
+  <section class="posts" id="posts" aria-label="Blog posts"></section>
+</main>
+<footer>Daniblog</footer>
+
+<div class="overlay" id="loginOverlay">
+  <div class="login-box" role="dialog" aria-modal="true">
+    <div class="box-head"><h2>Log in</h2><button class="close" data-close="loginOverlay">×</button></div>
+    <form id="loginForm">
+      <label for="username">Username</label>
+      <input id="username" autocomplete="username" required>
+      <label for="password">Password</label>
+      <input id="password" type="password" autocomplete="current-password" required>
+      <div class="actions">
+        <button type="button" data-close="loginOverlay">Cancel</button>
+        <button class="primary" type="submit">Log in</button>
+      </div>
+      <div class="message" id="loginMessage"></div>
+    </form>
+  </div>
+</div>
+
+<div class="overlay" id="dashboardOverlay">
+  <div class="dashboard-box" role="dialog" aria-modal="true">
+    <div class="box-head"><h2>Dashboard</h2><button class="close" data-close="dashboardOverlay">×</button></div>
+    <div class="tabs">
+      <button class="tab active" id="articlesTab">Articles</button>
+      <button class="tab" id="usersTab">Users</button>
+    </div>
+
+    <section id="articlesPanel">
+      <div class="dashboard-toolbar">
+        <span>Articles</span>
+        <button id="newArticleButton" type="button">Create new article</button>
+      </div>
+      <div id="articleRows"></div>
+    </section>
+
+    <section id="usersPanel" hidden>
+      <form id="addUserForm">
+        <label for="newUsername">New username</label>
+        <input id="newUsername" required maxlength="50">
+        <label for="newPassword">New password</label>
+        <input id="newPassword" type="password" required minlength="8">
+        <div class="actions"><button class="primary" type="submit">Add user</button></div>
+        <div class="message" id="userMessage"></div>
+      </form>
+      <hr style="border:0;border-top:1px solid #e0e0e0;margin:20px 0;">
+      <div id="userRows"></div>
+    </section>
+  </div>
+</div>
+
+<div class="overlay" id="dialogOverlay">
+  <div class="login-box" role="dialog" aria-modal="true">
+    <div class="box-head"><h2 id="dialogTitle">Daniblog</h2><button class="close" id="dialogClose">×</button></div>
+    <div class="message" id="dialogMessage"></div>
+    <div class="actions" id="dialogActions"></div>
+  </div>
+</div>
+
+<div class="overlay" id="userEditOverlay">
+  <div class="login-box" role="dialog" aria-modal="true">
+    <div class="box-head"><h2>Edit user</h2><button class="close" data-close="userEditOverlay">×</button></div>
+    <form id="userEditForm">
+      <input type="hidden" id="editUserId">
+      <label for="editUsername">Username</label>
+      <input id="editUsername" maxlength="50" required>
+      <label for="editPassword">New password</label>
+      <input id="editPassword" type="password" minlength="8" placeholder="Leave blank to keep current password">
+      <div class="actions"><button type="button" data-close="userEditOverlay">Cancel</button><button class="primary" type="submit">Save changes</button></div>
+      <div class="message" id="editUserMessage"></div>
+    </form>
+  </div>
+</div>
+
+<div class="overlay" id="editorOverlay">
+  <div class="editor-box" role="dialog" aria-modal="true">
+    <div class="box-head"><h2 id="editorHeading">New article</h2><button class="close" data-close="editorOverlay">×</button></div>
+    <form id="articleForm">
+      <label for="articleTitle">Title</label>
+      <input id="articleTitle" maxlength="200" required>
+      <label for="articleDescription">Description</label>
+      <input id="articleDescription" maxlength="300">
+      <div class="help">Use Markdown in the content. Images use standard Markdown: <code>![description](https://example.com/image.jpg)</code>.</div>
+      <label for="articleContent">Content</label>
+      <textarea id="articleContent" required></textarea>
+      <div class="rendered" id="preview"></div>
+      <div class="actions">
+        <button type="button" data-close="editorOverlay">Cancel</button>
+        <button class="primary" type="submit">Save article</button>
+      </div>
+      <div class="message" id="editorMessage"></div>
+    </form>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+<script>
+  const $ = id => document.getElementById(id);
+  let editingArticleId = null;
+
+  async function api(url, options = {}) {
+    const res = await fetch(url, {
+      ...options,
+      headers: { "Content-Type": "application/json", ...(options.headers || {}) }
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.error || "Request failed.");
+    return data;
+  }
+
+  function openOverlay(id) { $(id).classList.add("open"); }
+  function closeOverlay(id) { $(id).classList.remove("open"); }
+
+  document.querySelectorAll("[data-close]").forEach(btn => {
+    btn.addEventListener("click", () => closeOverlay(btn.dataset.close));
+  });
+
+  document.querySelectorAll(".overlay").forEach(o => {
+    o.addEventListener("click", e => { if (e.target === o) o.classList.remove("open"); });
+  });
+
+  document.addEventListener("keydown", e => {
+    if (e.key === "Escape") document.querySelectorAll(".overlay.open").forEach(o => o.classList.remove("open"));
+  });
+
+  async function refreshSession() {
+    const data = await api("/api/session");
+    const button = $("authButton");
+    if (data.loggedIn) {
+      button.textContent = "Logged in as " + data.user.username;
+      button.className = "account-button";
+      button.onclick = () => $("accountMenu").classList.toggle("open");
+      $("dashboardButton").style.display = data.user.isAdmin ? "block" : "none";
+    } else {
+      button.textContent = "Log in";
+      button.className = "login";
+      button.onclick = () => { openOverlay("loginOverlay"); $("username").focus(); };
+      $("accountMenu").classList.remove("open");
+    }
+  }
+
+  $("loginForm").addEventListener("submit", async e => {
+    e.preventDefault();
+    $("loginMessage").textContent = "";
+    try {
+      await api("/api/login", {
+        method: "POST",
+        body: JSON.stringify({
+          username: $("username").value,
+          password: $("password").value
+        })
+      });
+      $("loginForm").reset();
+      closeOverlay("loginOverlay");
+      await refreshSession();
+    } catch (err) {
+      $("loginMessage").textContent = "Username or password incorrect";
+    }
+  });
+
+  $("logoutButton").addEventListener("click", async () => {
+    await api("/api/logout", { method: "POST" });
+    $("accountMenu").classList.remove("open");
+    closeOverlay("dashboardOverlay");
+    await refreshSession();
+  });
+
+  $("dashboardButton").addEventListener("click", async () => {
+    $("accountMenu").classList.remove("open");
+    openOverlay("dashboardOverlay");
+    await loadDashboard();
+  });
+
+  async function loadDashboard() {
+    await loadArticles();
+    await loadUsers();
+  }
+
+  async function loadArticles() {
+    const articles = await api("/api/admin/articles");
+    $("articleRows").innerHTML = "";
+    for (const article of articles) {
+      const row = document.createElement("div");
+      row.className = "article-row";
+      const title = article.title.length > 15 ? article.title.slice(0, 15) + "..." : article.title;
+      row.innerHTML = `
+        <div class="row-title" title="${escapeHtml(article.title)}">${escapeHtml(title)}</div>
+        <div class="row-actions">
+          <button data-edit="${article.id}">Edit</button>
+          <button class="delete" data-delete="${article.id}">Delete</button>
+        </div>`;
+      $("articleRows").appendChild(row);
+    }
+
+    document.querySelectorAll("[data-edit]").forEach(b => b.onclick = () => editArticle(Number(b.dataset.edit)));
+    document.querySelectorAll("[data-delete]").forEach(b => b.onclick = () => deleteArticle(Number(b.dataset.delete)));
+  }
+
+  async function editArticle(id) {
+    const article = await api("/api/articles/" + id);
+    editingArticleId = id;
+    $("editorHeading").textContent = "Edit article";
+    $("articleTitle").value = article.title;
+    $("articleDescription").value = article.description;
+    $("articleContent").value = article.content;
+    updatePreview();
+    openOverlay("editorOverlay");
+  }
+
+  $("newArticleButton").addEventListener("click", () => {
+    editingArticleId = null;
+    $("editorHeading").textContent = "New article";
+    $("articleForm").reset();
+    $("preview").innerHTML = "";
+    $("editorMessage").textContent = "";
+    openOverlay("editorOverlay");
+    $("articleTitle").focus();
+  });
+
+  $("articleContent").addEventListener("input", updatePreview);
+  function updatePreview() {
+    // marked converts Markdown to HTML. Do not put untrusted raw HTML into production
+    // without adding a sanitizer such as DOMPurify on the client/server.
+    $("preview").innerHTML = marked.parse($("articleContent").value || "");
+  }
+
+  $("articleForm").addEventListener("submit", async e => {
+    e.preventDefault();
+    $("editorMessage").textContent = "";
+    const body = JSON.stringify({
+      title: $("articleTitle").value,
+      description: $("articleDescription").value,
+      content: $("articleContent").value
+    });
+
+    try {
+      if (editingArticleId) {
+        await api("/api/admin/articles/" + editingArticleId, { method: "PUT", body });
+      } else {
+        await api("/api/admin/articles", { method: "POST", body });
+      }
+      closeOverlay("editorOverlay");
+      await loadArticles();
+      await loadPublicArticles();
+    } catch (err) {
+      $("editorMessage").textContent = err.message;
+    }
+  });
+
+  const dialogOverlay = $("dialogOverlay");
+  function closeDialog() { dialogOverlay.classList.remove("open"); }
+  $("dialogClose").onclick = closeDialog;
+  dialogOverlay.addEventListener("click", e => { if (e.target === dialogOverlay) closeDialog(); });
+
+  function showDialog(title, message, buttons = [{ text:"OK", action:closeDialog }]) {
+    $("dialogTitle").textContent = title;
+    $("dialogMessage").textContent = message;
+    const actions = $("dialogActions");
+    actions.innerHTML = "";
+    buttons.forEach(item => {
+      const button = document.createElement("button");
+      button.textContent = item.text;
+      if (item.danger) button.style.color = "var(--red)";
+      button.onclick = item.action;
+      actions.appendChild(button);
+    });
+    dialogOverlay.classList.add("open");
+  }
+
+  async function deleteArticle(id) {
+    showDialog("Delete article?", "This article cannot be undone.", [
+      { text:"Cancel", action:closeDialog },
+      { text:"Delete", danger:true, action:async () => {
+        closeDialog();
+        try { await api("/api/admin/articles/" + id, { method:"DELETE" }); await loadArticles(); await loadPublicArticles(); }
+        catch (err) { showDialog("Could not delete", err.message); }
+      }}
+    ]);
+  }
+
+  $("articlesTab").addEventListener("click", () => {
+    $("articlesTab").classList.add("active");
+    $("usersTab").classList.remove("active");
+    $("articlesPanel").hidden = false;
+    $("usersPanel").hidden = true;
+  });
+
+  $("usersTab").addEventListener("click", async () => {
+    $("usersTab").classList.add("active");
+    $("articlesTab").classList.remove("active");
+    $("usersPanel").hidden = false;
+    $("articlesPanel").hidden = true;
+    await loadUsers();
+  });
+
+  $("addUserForm").addEventListener("submit", async e => {
+    e.preventDefault();
+    $("userMessage").textContent = "";
+    try {
+      await api("/api/admin/users", { method:"POST", body:JSON.stringify({ username:$("newUsername").value, password:$("newPassword").value }) });
+      $("addUserForm").reset();
+      $("userMessage").textContent = "User added.";
+      await loadUsers();
+    } catch (err) { $("userMessage").textContent = err.message; }
+  });
+
+  async function loadUsers() {
+    const users = await api("/api/admin/users");
+    $("userRows").innerHTML = "";
+    for (const user of users) {
+      const row = document.createElement("div");
+      row.className = "user-row";
+      row.innerHTML = `<div class="row-title">${escapeHtml(user.username)}${user.isAdmin ? " (admin)" : ""}</div><div class="row-actions"><button data-user-edit="${user.id}">Edit</button>${user.isAdmin ? "" : `<button class="delete" data-user-delete="${user.id}">Delete</button>`}</div>`;
+      $("userRows").appendChild(row);
+    }
+    document.querySelectorAll("[data-user-edit]").forEach(b => b.onclick = () => {
+      const user = users.find(u => u.id === Number(b.dataset.userEdit));
+      if (!user) return;
+      $("editUserId").value = user.id;
+      $("editUsername").value = user.username;
+      $("editPassword").value = "";
+      $("editUserMessage").textContent = "";
+      openOverlay("userEditOverlay");
+      $("editUsername").focus();
+    });
+    document.querySelectorAll("[data-user-delete]").forEach(b => b.onclick = () => deleteUser(Number(b.dataset.userDelete)));
+  }
+
+  $("userEditForm").addEventListener("submit", async e => {
+    e.preventDefault();
+    $("editUserMessage").textContent = "";
+    const payload = { username:$("editUsername").value };
+    if ($("editPassword").value !== "") payload.password = $("editPassword").value;
+    try {
+      const data = await api(`/api/admin/users/${$("editUserId").value}`, { method:"PUT", body:JSON.stringify(payload) });
+      closeOverlay("userEditOverlay");
+      await loadUsers();
+      await refreshSession();
+      if (data.selfChanged) showDialog("Account changed", "Your username or password was changed. You are still logged in.");
+    } catch (err) { $("editUserMessage").textContent = err.message; }
+  });
+
+  async function deleteUser(id) {
+    showDialog("Delete user?", "This user will be permanently deleted.", [
+      { text:"Cancel", action:closeDialog },
+      { text:"Delete", danger:true, action:async () => {
+        closeDialog();
+        try { await api("/api/admin/users/" + id, { method:"DELETE" }); await loadUsers(); }
+        catch (err) { showDialog("Could not delete", err.message); }
+      }}
+    ]);
+  }
+
+  function escapeHtml(value) {
+    return String(value).replace(/[&<>"']/g, ch => ({
+      "&":"&amp;", "<":"&lt;", ">":"&gt;", '"':"&quot;", "'":"&#039;"
+    }[ch]));
+  }
+
+  async function loadPublicArticles() {
+    const articles = await api("/api/articles");
+    $("posts").innerHTML = "";
+    for (const article of articles) {
+      const a = document.createElement("a");
+      a.className = "post-button";
+      a.href = "/article.html?id=" + article.id;
+      a.innerHTML = `
+        <span class="post-title">${escapeHtml(article.title)}</span>
+        <span class="post-description">${escapeHtml(article.description)}</span>
+        <span class="post-meta">
+          <span>${new Date(article.created_at + "Z").toLocaleString()}</span>
+          <span class="comment-count">${Number(article.comment_count || 0)} comments</span>
+        </span>`;
+      $("posts").appendChild(a);
+    }
+  }
+
+  refreshSession();
+  loadPublicArticles();
+</script>
+</body>
+</html>
+

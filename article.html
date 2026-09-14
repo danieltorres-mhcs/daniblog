@@ -1,0 +1,227 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Daniblog — Article</title>
+  <style>
+    body { margin:0; background:#f5f5f5; color:#424242; font-family:Arial,Roboto,Helvetica,sans-serif; line-height:1.6; }
+    .top { height:50px; background:#fff; border-bottom:1px solid #d5d5d5; display:flex; align-items:center; padding:0 18px; }
+    .top a { color:#555; text-decoration:none; display:flex; align-items:center; gap:8px; }
+    .back-icon { width:14px; height:14px; display:block; fill:currentColor; }
+    .page { width:min(760px,calc(100% - 32px)); margin:0 auto; padding:42px 0; }
+    article { background:#fff; border:1px solid #e0e0e0; padding:30px; }
+    h1 { margin-top:0; color:#333; font-weight:400; line-height:1.2; }
+    .description { color:#757575; margin-bottom:8px; }
+    .article-meta { color:#999; font-size:12px; margin-bottom:24px; }
+    .content img { max-width:100%; height:auto; display:block; margin:15px 0; }
+    .content pre { overflow:auto; background:#f5f5f5; padding:12px; }
+    .content code { background:#f0f0f0; padding:2px 4px; }
+
+    .comments-section { margin-top:18px; background:#fff; border:1px solid #e0e0e0; padding:24px 30px; }
+    .comments-section h2 { margin:0 0 15px; font-size:20px; font-weight:400; color:#333; }
+    .comment { border-top:1px solid #e0e0e0; padding:14px 0; }
+    .comment:first-child { border-top:0; padding-top:0; }
+    .comment-meta { display:flex; align-items:center; gap:8px; margin-bottom:5px; font-size:11px; color:#999; }
+    .comment-user { color:#555; font-weight:bold; }
+    .comment-body { color:#424242; white-space:pre-wrap; overflow-wrap:anywhere; }
+    .comment-delete, .reply-link, .view-replies { border:0; background:none; cursor:pointer; font-size:11px; padding:0; }
+    .comment-delete { margin-left:auto; color:#c62828; }
+    .reply-link, .view-replies { color:#4285f4; margin-right:12px; }
+    .comment-delete:hover, .reply-link:hover, .view-replies:hover { text-decoration:underline; }
+    .comment-actions { margin-top:7px; }
+    .replies { margin:10px 0 0 24px; border-left:1px solid #e0e0e0; padding-left:14px; }
+    .reply { padding:9px 0; border-top:1px solid #eee; }
+    .reply:first-child { border-top:0; }
+    .reply .comment-meta { margin-bottom:3px; }
+    .reply-form { margin-top:10px; padding-top:10px; border-top:1px solid #eee; }
+    .reply-form textarea, .comment-form textarea { width:100%; min-height:80px; box-sizing:border-box; resize:vertical; border:1px solid #ccc; padding:8px 9px; outline:none; font:inherit; }
+    .reply-form button, .comment-form button { margin-top:8px; border:1px solid #d0d0d0; background:#fff; color:#555; padding:7px 14px; cursor:pointer; font-size:13px; }
+    .reply-form button:hover, .comment-form button:hover { background:#f5f5f5; }
+    .comment-form { margin-top:18px; padding-top:18px; border-top:1px solid #e0e0e0; }
+    .comment-login-note { color:#757575; font-size:12px; }
+    .empty-comments { color:#757575; font-size:13px; }
+
+    .dialog-overlay { display:none; position:fixed; inset:0; background:rgba(0,0,0,.25); align-items:flex-start; justify-content:center; padding:50px 15px; z-index:50; overflow:auto; }
+    .dialog-overlay.open { display:flex; }
+    .dialog-box { width:min(380px,100%); background:#fff; border:1px solid #ccc; box-shadow:0 2px 8px rgba(0,0,0,.2); padding:20px; }
+    .dialog-head { display:flex; align-items:center; justify-content:space-between; gap:15px; margin-bottom:12px; }
+    .dialog-head h2 { margin:0; font-size:18px; font-weight:400; color:#333; }
+    .dialog-close { border:0; background:none; color:#777; font-size:20px; cursor:pointer; }
+    .dialog-message { color:#555; font-size:13px; line-height:1.5; }
+    .dialog-actions { display:flex; justify-content:flex-end; gap:8px; margin-top:18px; }
+    .dialog-actions button { border:1px solid #d0d0d0; background:#fff; color:#555; padding:7px 14px; cursor:pointer; font-size:13px; }
+    .dialog-actions .danger { color:#c62828; }
+  </style>
+</head>
+<body>
+  <div class="top"><a class="back-link" href="/">
+    <svg class="back-icon" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--!Font Awesome Free v7.3.1 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free Copyright 2026 Fonticons, Inc.--><path d="M9.4 233.4c-12.5 12.5-12.5 32.8 0 45.3l160 160c12.5 12.5 32.8 12.5 45.3 0s12.5-32.8 0-45.3L109.3 288 480 288c17.7 0 32-14.3 32-32s-14.3-32-32-32l-370.7 0 105.4-105.4c12.5-12.5 12.5-32.8 0-45.3s-32.8-12.5-45.3 0l-160 160z"/></svg>
+    <span>Daniblog</span>
+  </a></div>
+  <main class="page">
+    <article id="article">Loading...</article>
+    <section class="comments-section" id="comments">
+      <h2>Comments</h2>
+      <div id="commentsList"></div>
+      <div id="commentFormArea"></div>
+    </section>
+  </main>
+
+  <div class="dialog-overlay" id="dialogOverlay">
+    <div class="dialog-box" role="dialog" aria-modal="true">
+      <div class="dialog-head"><h2 id="dialogTitle">Daniblog</h2><button class="dialog-close" id="dialogClose">×</button></div>
+      <div class="dialog-message" id="dialogMessage"></div>
+      <div class="dialog-actions" id="dialogActions"></div>
+    </div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+  <script>
+    function escapeHtml(value) {
+      return String(value).replace(/[&<>"']/g, ch => ({"&":"&amp;", "<":"&lt;", ">":"&gt;", '"':"&quot;", "'":"&#039;"}[ch]));
+    }
+
+    const dialogOverlay = document.getElementById('dialogOverlay');
+    function closeDialog() { dialogOverlay.classList.remove('open'); }
+    document.getElementById('dialogClose').onclick = closeDialog;
+    dialogOverlay.addEventListener('click', e => { if (e.target === dialogOverlay) closeDialog(); });
+    document.addEventListener('keydown', e => { if (e.key === 'Escape') closeDialog(); });
+
+    function showDialog(title, message, buttons = [{text:'OK', action:closeDialog}]) {
+      document.getElementById('dialogTitle').textContent = title;
+      document.getElementById('dialogMessage').textContent = message;
+      const actions = document.getElementById('dialogActions');
+      actions.innerHTML = '';
+      buttons.forEach(item => {
+        const button = document.createElement('button');
+        button.textContent = item.text;
+        if (item.danger) button.className = 'danger';
+        button.onclick = item.action;
+        actions.appendChild(button);
+      });
+      dialogOverlay.classList.add('open');
+    }
+
+    async function load() {
+      const id = new URLSearchParams(location.search).get('id');
+      const res = await fetch('/api/articles/' + encodeURIComponent(id));
+      const article = await res.json();
+      if (!res.ok) {
+        document.getElementById('article').textContent = article.error || 'Article not found.';
+        return;
+      }
+      document.title = 'Daniblog — ' + article.title;
+      document.getElementById('article').innerHTML = `<h1>${escapeHtml(article.title)}</h1><div class="description">${escapeHtml(article.description)}</div><div class="article-meta">${new Date(article.created_at + 'Z').toLocaleString()}</div><div class="content">${marked.parse(article.content)}</div>`;
+    }
+
+    let currentSession = { loggedIn:false, user:null };
+    const visibleReplyCounts = new Map();
+    let loadedComments = [];
+
+    async function loadComments() {
+      const id = new URLSearchParams(location.search).get('id');
+      if (!id) return;
+      const [commentsRes, sessionRes] = await Promise.all([fetch(`/api/articles/${id}/comments`), fetch('/api/session')]);
+      const comments = await commentsRes.json();
+      currentSession = await sessionRes.json();
+      loadedComments = comments;
+      const list = document.getElementById('commentsList');
+      const topLevel = comments.filter(c => !c.parent_id);
+
+      if (!topLevel.length) list.innerHTML = '<p class="empty-comments">No comments yet.</p>';
+      else list.innerHTML = topLevel.map(c => renderComment(c, comments)).join('');
+
+      const area = document.getElementById('commentFormArea');
+      if (currentSession.loggedIn) {
+        area.innerHTML = `<form class="comment-form" onsubmit="postComment(event, null)"><textarea id="commentText" maxlength="5000" placeholder="Write a comment..." required></textarea><button type="submit">Post Comment</button></form>`;
+      } else area.innerHTML = '<p class="comment-login-note">Log in to add a comment.</p>';
+    }
+
+    function renderComment(c, allComments) {
+      const replies = allComments.filter(r => Number(r.parent_id) === Number(c.id));
+      const count = replies.length;
+      const visible = Math.min(visibleReplyCounts.get(c.id) || 0, count);
+      const shown = replies.slice(0, visible);
+      const canDelete = currentSession.loggedIn && (currentSession.user.id === c.user_id || currentSession.user.isAdmin);
+      return `<div class="comment">
+        <div class="comment-meta"><span class="comment-user">${escapeHtml(c.username)}</span><span>${new Date(c.created_at + 'Z').toLocaleString()}</span>${canDelete ? `<button class="comment-delete" onclick="deleteComment(${c.id})">Delete</button>` : ''}</div>
+        <div class="comment-body">${escapeHtml(c.content)}</div>
+        <div class="comment-actions">
+          ${currentSession.loggedIn ? `<button class="reply-link" onclick="showReplyForm(${c.id}, null)">Reply</button>` : ''}
+          ${count && visible < count ? `<button class="view-replies" onclick="showReplies(${c.id})">${visible ? 'View more replies' : 'View ' + count + ' ' + (count === 1 ? 'reply' : 'replies')}</button>` : ''}
+        </div>
+        <div id="reply-form-${c.id}"></div>
+        <div class="replies" id="replies-${c.id}">${shown.map(r => renderReply(r, c.id)).join('')}</div>
+      </div>`;
+    }
+
+    function renderReply(r, rootId) {
+      const canDelete = currentSession.loggedIn && (currentSession.user.id === r.user_id || currentSession.user.isAdmin);
+      const mention = r.reply_to_username ? `@${escapeHtml(r.reply_to_username)} ` : '';
+      return `<div class="reply"><div class="comment-meta"><span class="comment-user">${escapeHtml(r.username)}</span><span>${new Date(r.created_at + 'Z').toLocaleString()}</span>${canDelete ? `<button class="comment-delete" onclick="deleteComment(${r.id})">Delete</button>` : ''}</div><div class="comment-body">${mention}${escapeHtml(r.content)}</div><div class="comment-actions">${currentSession.loggedIn ? `<button class="reply-link" onclick="showReplyForm(${rootId}, ${Number(r.user_id)})">Reply</button>` : ''}</div></div>`;
+    }
+
+    function showReplies(id) {
+      const idNum = Number(id);
+      const current = visibleReplyCounts.get(idNum) || 0;
+      visibleReplyCounts.set(idNum, current ? current + 5 : 5);
+      loadComments();
+    }
+
+    function showReplyForm(parentId, replyToUserId) {
+      const holder = document.getElementById('reply-form-' + parentId);
+      if (!holder) return;
+
+      const target = replyToUserId == null
+        ? null
+        : loadedComments.find(c => Number(c.user_id) === Number(replyToUserId));
+
+      // The displayed @username comes from the same live comment data that
+      // the server returns, so username changes are reflected after reload.
+      const prefix = target ? '@' + target.username + ' ' : '';
+      holder.innerHTML = `<form class="reply-form" onsubmit="postComment(event, ${parentId}, ${replyToUserId == null ? 'null' : Number(replyToUserId)})"><textarea id="replyText-${parentId}" maxlength="5000" placeholder="Write a reply..." required>${escapeHtml(prefix)}</textarea><button type="submit">Post Reply</button></form>`;
+      const textarea = document.getElementById('replyText-' + parentId);
+      textarea.focus();
+      textarea.setSelectionRange(textarea.value.length, textarea.value.length);
+    }
+
+    async function postComment(event, parentId, replyToUserId) {
+      event.preventDefault();
+      const id = new URLSearchParams(location.search).get('id');
+      const textarea = parentId ? document.getElementById('replyText-' + parentId) : document.getElementById('commentText');
+      const content = textarea.value.trim();
+      if (!content) return;
+      const body = { content };
+      if (parentId) {
+        body.parentId = Number(parentId);
+        if (replyToUserId != null) {
+          body.replyToUserId = Number(replyToUserId);
+        }
+      }
+      const res = await fetch(`/api/articles/${id}/comments`, { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(body) });
+      const data = await res.json();
+      if (!res.ok) return showDialog('Could not post', data.error || 'Could not post comment.');
+      textarea.value = '';
+      if (parentId) visibleReplyCounts.set(Number(parentId), Math.max(5, visibleReplyCounts.get(Number(parentId)) || 0));
+      await loadComments();
+    }
+
+    function deleteComment(id) {
+      showDialog('Delete comment?', 'This comment will be permanently deleted.', [
+        { text:'Cancel', action:closeDialog },
+        { text:'Delete', danger:true, action:async () => {
+          closeDialog();
+          const res = await fetch(`/api/comments/${id}`, {method:'DELETE'});
+          const data = await res.json();
+          if (!res.ok) return showDialog('Could not delete', data.error || 'Could not delete comment.');
+          await loadComments();
+        }}
+      ]);
+    }
+
+    load();
+    loadComments();
+  </script>
+</body>
+</html>
