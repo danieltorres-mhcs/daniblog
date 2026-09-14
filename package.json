@@ -1,0 +1,23 @@
+{
+  "name": "daniblog",
+  "version": "1.4.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "start": "node server.js",
+    "seed-admin": "node seed-admin.js"
+  },
+  "dependencies": {
+    "bcryptjs": "^3.0.2",
+    "connect-sqlite3": "^0.9.15",
+    "dotenv": "^17.2.1",
+    "express": "^5.1.0",
+    "express-session": "^1.18.2",
+    "marked": "^16.1.1",
+    "better-sqlite3": "^12.2.0"
+  },
+  "allowScripts": {
+    "better-sqlite3@12.11.1": true,
+    "sqlite3@5.1.7": true
+  }
+}
