@@ -32,6 +32,7 @@ db.exec(`
     username TEXT NOT NULL UNIQUE COLLATE NOCASE,
     password_hash TEXT NOT NULL,
     is_admin INTEGER NOT NULL DEFAULT 0,
+    can_post INTEGER NOT NULL DEFAULT 0,
     created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
   );
 
@@ -54,10 +55,19 @@ db.exec(`
     title TEXT NOT NULL,
     description TEXT NOT NULL DEFAULT '',
     content TEXT NOT NULL DEFAULT '',
+    author_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
+    status TEXT NOT NULL DEFAULT 'published',
+    review_note TEXT NOT NULL DEFAULT '',
     created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
   );
 `);
+
+// Add posting permission to existing user tables.
+const userColumns = db.prepare("PRAGMA table_info(users)").all().map(row => row.name);
+if (!userColumns.includes("can_post")) {
+  db.exec("ALTER TABLE users ADD COLUMN can_post INTEGER NOT NULL DEFAULT 0");
+}
 
 // Migrate existing databases created before threaded replies were added.
 const commentColumns = db.prepare("PRAGMA table_info(comments)").all().map(row => row.name);
@@ -69,6 +79,25 @@ if (!commentColumns.includes("reply_to_user_id")) {
 }
 db.exec("CREATE INDEX IF NOT EXISTS idx_comments_article_parent ON comments(article_id, parent_id, id)");
 
+// Migrate article publishing fields for existing databases.
+const articleColumns = db.prepare("PRAGMA table_info(articles)").all().map(row => row.name);
+if (!articleColumns.includes("author_id")) {
+  db.exec("ALTER TABLE articles ADD COLUMN author_id INTEGER REFERENCES users(id) ON DELETE SET NULL");
+}
+if (!articleColumns.includes("status")) {
+  db.exec("ALTER TABLE articles ADD COLUMN status TEXT NOT NULL DEFAULT 'published'");
+}
+if (!articleColumns.includes("review_note")) {
+  db.exec("ALTER TABLE articles ADD COLUMN review_note TEXT NOT NULL DEFAULT ''");
+}
+db.exec("CREATE INDEX IF NOT EXISTS idx_articles_status_created ON articles(status, created_at)");
+const danielUser = db.prepare("SELECT id FROM users WHERE username = ? COLLATE NOCASE").get("Daniel");
+if (danielUser) {
+  db.prepare("UPDATE articles SET author_id = ? WHERE author_id IS NULL").run(danielUser.id);
+}
+
+
+
 // Ensure the Daniel administrator account exists in the same database used by the app.
 // ADMIN_PASSWORD is supplied by the hosting environment (for example, Render).
 if (process.env.ADMIN_PASSWORD) {
@@ -77,11 +106,11 @@ if (process.env.ADMIN_PASSWORD) {
   const existingAdmin = db.prepare("SELECT id FROM users WHERE username = ?").get("Daniel");
 
   if (existingAdmin) {
-    db.prepare("UPDATE users SET password_hash = ?, is_admin = 1 WHERE id = ?")
+    db.prepare("UPDATE users SET password_hash = ?, is_admin = 1, can_post = 1 WHERE id = ?")
       .run(adminHash, existingAdmin.id);
     console.log("Daniel administrator account verified.");
   } else {
-    db.prepare("INSERT INTO users (username, password_hash, is_admin) VALUES (?, ?, 1)")
+    db.prepare("INSERT INTO users (username, password_hash, is_admin, can_post) VALUES (?, ?, 1, 1)")
       .run("Daniel", adminHash);
     console.log("Daniel administrator account created.");
   }
@@ -110,7 +139,7 @@ app.use(express.static(path.join(__dirname, "public")));
 function currentUser(req) {
   if (!req.session.userId) return null;
   return db.prepare(
-    "SELECT id, username, is_admin FROM users WHERE id = ?"
+    "SELECT id, username, is_admin, can_post FROM users WHERE id = ?"
   ).get(req.session.userId) || null;
 }
 
@@ -128,12 +157,23 @@ function requireAdmin(req, res, next) {
   next();
 }
 
+function requirePostPermission(req, res, next) {
+  const user = currentUser(req);
+  if (!user) return res.status(401).json({ error: "Not logged in." });
+  if (!user.is_admin && !user.can_post) return res.status(403).json({ error: "You do not have permission to create posts." });
+  req.user = user;
+  next();
+}
+
 // Public article list
 app.get("/api/articles", (req, res) => {
   const rows = db.prepare(`
     SELECT a.id, a.title, a.description, a.content, a.created_at, a.updated_at,
+           a.author_id, u.username AS author_username,
            (SELECT COUNT(*) FROM comments c WHERE c.article_id = a.id) AS comment_count
     FROM articles a
+    LEFT JOIN users u ON u.id = a.author_id
+    WHERE a.status = 'published'
     ORDER BY datetime(a.created_at) DESC, a.id DESC
   `).all();
   res.json(rows);
@@ -142,8 +182,11 @@ app.get("/api/articles", (req, res) => {
 // Public single article
 app.get("/api/articles/:id", (req, res) => {
   const row = db.prepare(`
-    SELECT id, title, description, content, created_at, updated_at
-    FROM articles WHERE id = ?
+    SELECT a.id, a.title, a.description, a.content, a.created_at, a.updated_at,
+           a.author_id, u.username AS author_username
+    FROM articles a
+    LEFT JOIN users u ON u.id = a.author_id
+    WHERE a.id = ? AND a.status = 'published' 
   `).get(Number(req.params.id));
 
   if (!row) return res.status(404).json({ error: "Article not found." });
@@ -232,7 +275,8 @@ app.get("/api/session", (req, res) => {
     user: user ? {
       id: user.id,
       username: user.username,
-      isAdmin: Boolean(user.is_admin)
+      isAdmin: Boolean(user.is_admin),
+      canPost: Boolean(user.can_post)
     } : null
   });
 });
@@ -297,16 +341,30 @@ app.post("/api/logout", requireLogin, (req, res) => {
   });
 });
 
+// Admin: get any article, including pending/denied submissions.
+app.get("/api/admin/articles/:id", requireAdmin, (req, res) => {
+  const row = db.prepare(`
+    SELECT a.id, a.title, a.description, a.content, a.created_at, a.updated_at,
+           a.author_id, u.username AS author_username, a.status, a.review_note
+    FROM articles a LEFT JOIN users u ON u.id = a.author_id
+    WHERE a.id = ?
+  `).get(Number(req.params.id));
+  if (!row) return res.status(404).json({ error: "Article not found." });
+  res.json(row);
+});
+
 // Admin: all articles
 app.get("/api/admin/articles", requireAdmin, (req, res) => {
   const rows = db.prepare(`
-    SELECT id, title, description, content, created_at, updated_at
-    FROM articles ORDER BY datetime(updated_at) DESC, id DESC
+    SELECT a.id, a.title, a.description, a.content, a.created_at, a.updated_at,
+           a.author_id, u.username AS author_username, a.status, a.review_note
+    FROM articles a LEFT JOIN users u ON u.id = a.author_id
+    ORDER BY CASE a.status WHEN 'pending' THEN 0 WHEN 'published' THEN 1 ELSE 2 END, datetime(a.updated_at) DESC, a.id DESC
   `).all();
   res.json(rows);
 });
 
-// Admin: create article
+// Admin: create article (published immediately because Daniel approved it).
 app.post("/api/admin/articles", requireAdmin, (req, res) => {
   const title = String(req.body.title || "").trim();
   const description = String(req.body.description || "").trim();
@@ -315,14 +373,31 @@ app.post("/api/admin/articles", requireAdmin, (req, res) => {
   if (!title) return res.status(400).json({ error: "Title is required." });
 
   const result = db.prepare(`
-    INSERT INTO articles (title, description, content)
-    VALUES (?, ?, ?)
-  `).run(title, description, content);
+    INSERT INTO articles (title, description, content, author_id, status, review_note)
+    VALUES (?, ?, ?, ?, 'published', '')
+  `).run(title, description, content, req.user.id);
 
-  res.status(201).json({ id: result.lastInsertRowid });
+  res.status(201).json({ id: result.lastInsertRowid, status: "published" });
 });
 
-// Admin: edit article
+// Users with posting permission submit articles for Daniel to review.
+app.post("/api/articles", requirePostPermission, (req, res) => {
+  const title = String(req.body.title || "").trim();
+  const description = String(req.body.description || "").trim();
+  const content = String(req.body.content || "");
+
+  if (!title) return res.status(400).json({ error: "Title is required." });
+  if (!content.trim()) return res.status(400).json({ error: "Content is required." });
+
+  const result = db.prepare(`
+    INSERT INTO articles (title, description, content, author_id, status, review_note)
+    VALUES (?, ?, ?, ?, 'pending', '')
+  `).run(title, description, content, req.user.id);
+
+  res.status(201).json({ id: result.lastInsertRowid, status: "pending" });
+});
+
+// Admin: edit article. Editing a pending post keeps it pending until Daniel approves it.
 app.put("/api/admin/articles/:id", requireAdmin, (req, res) => {
   const id = Number(req.params.id);
   const title = String(req.body.title || "").trim();
@@ -341,6 +416,24 @@ app.put("/api/admin/articles/:id", requireAdmin, (req, res) => {
   res.json({ ok: true });
 });
 
+// Admin: approve or deny a submitted article.
+app.post("/api/admin/articles/:id/review", requireAdmin, (req, res) => {
+  const id = Number(req.params.id);
+  const decision = String(req.body.decision || "").toLowerCase();
+  const note = String(req.body.note || "").trim().slice(0, 1000);
+  if (!["approve", "deny"].includes(decision)) {
+    return res.status(400).json({ error: "Decision must be approve or deny." });
+  }
+  const status = decision === "approve" ? "published" : "denied";
+  const result = db.prepare(`
+    UPDATE articles
+    SET status = ?, review_note = ?, updated_at = CURRENT_TIMESTAMP
+    WHERE id = ?
+  `).run(status, note, id);
+  if (!result.changes) return res.status(404).json({ error: "Article not found." });
+  res.json({ ok: true, status });
+});
+
 // Admin: delete article
 app.delete("/api/admin/articles/:id", requireAdmin, (req, res) => {
   const result = db.prepare("DELETE FROM articles WHERE id = ?")
@@ -353,13 +446,14 @@ app.delete("/api/admin/articles/:id", requireAdmin, (req, res) => {
 // Admin: list users
 app.get("/api/admin/users", requireAdmin, (req, res) => {
   const rows = db.prepare(`
-    SELECT id, username, is_admin, created_at
+    SELECT id, username, is_admin, can_post, created_at
     FROM users ORDER BY username COLLATE NOCASE
   `).all();
 
   res.json(rows.map(row => ({
     ...row,
-    isAdmin: Boolean(row.is_admin)
+    isAdmin: Boolean(row.is_admin),
+    canPost: Boolean(row.can_post)
   })));
 });
 
@@ -388,8 +482,8 @@ app.post("/api/admin/users", requireAdmin, async (req, res) => {
 
   try {
     const result = db.prepare(`
-      INSERT INTO users (username, password_hash, is_admin)
-      VALUES (?, ?, 0)
+      INSERT INTO users (username, password_hash, is_admin, can_post)
+      VALUES (?, ?, 0, 0)
     `).run(username, hash);
 
     res.status(201).json({ id: result.lastInsertRowid });
@@ -404,13 +498,14 @@ app.post("/api/admin/users", requireAdmin, async (req, res) => {
 // Admin: edit user
 app.put("/api/admin/users/:id", requireAdmin, async (req, res) => {
   const id = Number(req.params.id);
-  const target = db.prepare("SELECT id, username, is_admin FROM users WHERE id = ?").get(id);
+  const target = db.prepare("SELECT id, username, is_admin, can_post FROM users WHERE id = ?").get(id);
   if (!target) return res.status(404).json({ error: "User not found." });
 
   const usernameProvided = Object.prototype.hasOwnProperty.call(req.body, "username");
   const passwordProvided = Object.prototype.hasOwnProperty.call(req.body, "password");
   const username = usernameProvided ? String(req.body.username || "").trim() : target.username;
   const password = passwordProvided ? String(req.body.password || "") : "";
+  const canPost = Object.prototype.hasOwnProperty.call(req.body, "canPost") ? Boolean(req.body.canPost) : Boolean(target.can_post);
 
   if (!username) return res.status(400).json({ error: "Username cannot be empty." });
   if (username.length > 50) return res.status(400).json({ error: "Username is too long." });
@@ -424,9 +519,9 @@ app.put("/api/admin/users/:id", requireAdmin, async (req, res) => {
   try {
     if (passwordProvided) {
       const hash = await bcrypt.hash(password, 12);
-      db.prepare("UPDATE users SET username = ?, password_hash = ? WHERE id = ?").run(username, hash, id);
+      db.prepare("UPDATE users SET username = ?, password_hash = ?, can_post = ? WHERE id = ?").run(username, hash, canPost ? 1 : 0, id);
     } else {
-      db.prepare("UPDATE users SET username = ? WHERE id = ?").run(username, id);
+      db.prepare("UPDATE users SET username = ?, can_post = ? WHERE id = ?").run(username, canPost ? 1 : 0, id);
     }
   } catch (error) {
     if (String(error.message).includes("UNIQUE")) {
@@ -437,7 +532,7 @@ app.put("/api/admin/users/:id", requireAdmin, async (req, res) => {
 
   const selfChanged = id === req.session.userId;
   if (selfChanged) {
-    const updated = db.prepare("SELECT id, username, is_admin FROM users WHERE id = ?").get(id);
+    const updated = db.prepare("SELECT id, username, is_admin, can_post FROM users WHERE id = ?").get(id);
     req.session.userId = updated.id;
   }
 
@@ -451,7 +546,7 @@ app.put("/api/admin/users/:id", requireAdmin, async (req, res) => {
 app.delete("/api/admin/users/:id", requireAdmin, (req, res) => {
   const id = Number(req.params.id);
   const target = db.prepare(
-    "SELECT id, username, is_admin FROM users WHERE id = ?"
+    "SELECT id, username, is_admin, can_post FROM users WHERE id = ?"
   ).get(id);
 
   if (!target) return res.status(404).json({ error: "User not found." });
