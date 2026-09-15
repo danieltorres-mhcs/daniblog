@@ -98,7 +98,8 @@
     <div class="account">
       <button class="login" id="authButton">Log in</button>
       <div class="account-menu" id="accountMenu">
-        <button id="dashboardButton">Dashboard</button>
+        <button id="createPostButton" style="display:none">Create a post</button>
+        <button id="dashboardButton" style="display:none">Dashboard</button>
         <button class="danger" id="logoutButton">Log out</button>
       </div>
     </div>
@@ -108,7 +109,7 @@
 <main class="page">
   <section class="site-heading">
     <h1>Daniblog</h1>
-    <p>blog site for news, thoughts, and opinions. contact me on any link from <a href="https://dani.devs.surf" target="_blank">dani.devs.surf</a> for an account to comment.</p>
+    <p>A simple place for my thoughts, notes, and things worth sharing.</p>
   </section>
   <section class="posts" id="posts" aria-label="Blog posts"></section>
 </main>
@@ -179,6 +180,7 @@
       <input id="editUsername" maxlength="50" required>
       <label for="editPassword">New password</label>
       <input id="editPassword" type="password" minlength="8" placeholder="Leave blank to keep current password">
+      <label style="display:flex;align-items:center;gap:8px;margin-top:13px;"><input id="editCanPost" type="checkbox" style="width:auto;height:auto;"> Can create posts</label>
       <div class="actions"><button type="button" data-close="userEditOverlay">Cancel</button><button class="primary" type="submit">Save changes</button></div>
       <div class="message" id="editUserMessage"></div>
     </form>
@@ -210,6 +212,7 @@
 <script>
   const $ = id => document.getElementById(id);
   let editingArticleId = null;
+  let editorMode = "admin";
 
   async function api(url, options = {}) {
     const res = await fetch(url, {
@@ -248,11 +251,14 @@
       button.className = "account-button";
       button.onclick = () => $("accountMenu").classList.toggle("open");
       $("dashboardButton").style.display = data.user.isAdmin ? "block" : "none";
+      $("createPostButton").style.display = (data.user.isAdmin || data.user.canPost) ? "block" : "none";
     } else {
       button.textContent = "Log in";
       button.className = "login";
       button.onclick = () => { openOverlay("loginOverlay"); $("username").focus(); };
       $("accountMenu").classList.remove("open");
+      $("createPostButton").style.display = "none";
+      $("dashboardButton").style.display = "none";
     }
   }
 
@@ -300,9 +306,12 @@
       const row = document.createElement("div");
       row.className = "article-row";
       const title = article.title.length > 15 ? article.title.slice(0, 15) + "..." : article.title;
+      const status = article.status || "published";
+      const statusLabel = status === "pending" ? "Pending review" : status === "denied" ? "Denied" : "Published";
       row.innerHTML = `
-        <div class="row-title" title="${escapeHtml(article.title)}">${escapeHtml(title)}</div>
+        <div class="row-title" title="${escapeHtml(article.title)}">${escapeHtml(title)}<div style="font-size:11px;color:#999;margin-top:2px;">By ${escapeHtml(article.author_username || "Unknown")} · ${statusLabel}</div></div>
         <div class="row-actions">
+          ${status === "pending" ? `<button data-approve="${article.id}">Accept</button><button data-deny="${article.id}" class="delete">Deny</button>` : ""}
           <button data-edit="${article.id}">Edit</button>
           <button class="delete" data-delete="${article.id}">Delete</button>
         </div>`;
@@ -311,11 +320,14 @@
 
     document.querySelectorAll("[data-edit]").forEach(b => b.onclick = () => editArticle(Number(b.dataset.edit)));
     document.querySelectorAll("[data-delete]").forEach(b => b.onclick = () => deleteArticle(Number(b.dataset.delete)));
+    document.querySelectorAll("[data-approve]").forEach(b => b.onclick = () => reviewArticle(Number(b.dataset.approve), "approve"));
+    document.querySelectorAll("[data-deny]").forEach(b => b.onclick = () => reviewArticle(Number(b.dataset.deny), "deny"));
   }
 
   async function editArticle(id) {
-    const article = await api("/api/articles/" + id);
+    const article = await api("/api/admin/articles/" + id);
     editingArticleId = id;
+    editorMode = "admin";
     $("editorHeading").textContent = "Edit article";
     $("articleTitle").value = article.title;
     $("articleDescription").value = article.description;
@@ -324,8 +336,21 @@
     openOverlay("editorOverlay");
   }
 
+  $("createPostButton").addEventListener("click", () => {
+    $("accountMenu").classList.remove("open");
+    editingArticleId = null;
+    editorMode = "user";
+    $("editorHeading").textContent = "Submit a post";
+    $("articleForm").reset();
+    $("preview").innerHTML = "";
+    $("editorMessage").textContent = "Your post will be sent to Daniel for review before it is published.";
+    openOverlay("editorOverlay");
+    $("articleTitle").focus();
+  });
+
   $("newArticleButton").addEventListener("click", () => {
     editingArticleId = null;
+    editorMode = "admin";
     $("editorHeading").textContent = "New article";
     $("articleForm").reset();
     $("preview").innerHTML = "";
@@ -384,6 +409,21 @@
     dialogOverlay.classList.add("open");
   }
 
+  async function reviewArticle(id, decision) {
+    const label = decision === "approve" ? "accept" : "deny";
+    showDialog(decision === "approve" ? "Accept post?" : "Deny post?", decision === "approve" ? "This will publish the post immediately." : "This will keep the post hidden from the public.", [
+      { text:"Cancel", action:closeDialog },
+      { text:decision === "approve" ? "Accept" : "Deny", danger:decision === "deny", action:async () => {
+        closeDialog();
+        try {
+          await api("/api/admin/articles/" + id + "/review", { method:"POST", body:JSON.stringify({ decision }) });
+          await loadArticles();
+          await loadPublicArticles();
+        } catch (err) { showDialog("Could not " + label + "", err.message); }
+      }}
+    ]);
+  }
+
   async function deleteArticle(id) {
     showDialog("Delete article?", "This article cannot be undone.", [
       { text:"Cancel", action:closeDialog },
@@ -427,7 +467,7 @@
     for (const user of users) {
       const row = document.createElement("div");
       row.className = "user-row";
-      row.innerHTML = `<div class="row-title">${escapeHtml(user.username)}${user.isAdmin ? " (admin)" : ""}</div><div class="row-actions"><button data-user-edit="${user.id}">Edit</button>${user.isAdmin ? "" : `<button class="delete" data-user-delete="${user.id}">Delete</button>`}</div>`;
+      row.innerHTML = `<div class="row-title">${escapeHtml(user.username)}${user.isAdmin ? " (admin)" : ""}${!user.isAdmin && user.canPost ? " · can post" : ""}</div><div class="row-actions"><button data-user-edit="${user.id}">Edit</button>${user.isAdmin ? "" : `<button class="delete" data-user-delete="${user.id}">Delete</button>`}</div>`;
       $("userRows").appendChild(row);
     }
     document.querySelectorAll("[data-user-edit]").forEach(b => b.onclick = () => {
@@ -436,6 +476,7 @@
       $("editUserId").value = user.id;
       $("editUsername").value = user.username;
       $("editPassword").value = "";
+      $("editCanPost").checked = Boolean(user.canPost);
       $("editUserMessage").textContent = "";
       openOverlay("userEditOverlay");
       $("editUsername").focus();
@@ -446,7 +487,7 @@
   $("userEditForm").addEventListener("submit", async e => {
     e.preventDefault();
     $("editUserMessage").textContent = "";
-    const payload = { username:$("editUsername").value };
+    const payload = { username:$("editUsername").value, canPost:$("editCanPost").checked };
     if ($("editPassword").value !== "") payload.password = $("editPassword").value;
     try {
       const data = await api(`/api/admin/users/${$("editUserId").value}`, { method:"PUT", body:JSON.stringify(payload) });
@@ -485,6 +526,7 @@
         <span class="post-title">${escapeHtml(article.title)}</span>
         <span class="post-description">${escapeHtml(article.description)}</span>
         <span class="post-meta">
+          <span>By ${escapeHtml(article.author_username || "Unknown")}</span>
           <span>${new Date(article.created_at + "Z").toLocaleString()}</span>
           <span class="comment-count">${Number(article.comment_count || 0)} comments</span>
         </span>`;
