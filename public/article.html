@@ -112,7 +112,7 @@
         return;
       }
       document.title = 'Daniblog — ' + article.title;
-      document.getElementById('article').innerHTML = `<h1>${escapeHtml(article.title)}</h1><div class="description">${escapeHtml(article.description)}</div><div class="article-meta">${new Date(article.created_at + 'Z').toLocaleString()}</div><div class="content">${marked.parse(article.content)}</div>`;
+      document.getElementById('article').innerHTML = `<h1>${escapeHtml(article.title)}</h1><div class="description">${escapeHtml(article.description)}</div><div class="article-meta">By ${escapeHtml(article.author_username || "Unknown")} · ${new Date(article.created_at + 'Z').toLocaleString()}</div><div class="content">${marked.parse(article.content)}</div>`;
     }
 
     let currentSession = { loggedIn:false, user:null };
