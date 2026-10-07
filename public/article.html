@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <link rel="icon" type="image/png" href="https://github.com/danieltorres-mhcs/assets/blob/main/Untitled27_20260914211220.png?raw=true">
   <link rel="alternate" type="application/rss+xml" title="Daniblog RSS" href="/rss.xml">
+  
   <title>Daniblog — Article</title>
   <style>
     body { margin:0; background:#f5f5f5; color:#424242; font-family:Arial,Roboto,Helvetica,sans-serif; line-height:1.6; }
@@ -23,6 +24,7 @@
     .comments-section { margin-top:18px; background:#fff; border:1px solid #e0e0e0; padding:24px 30px; }
     .comments-section h2 { margin:0 0 15px; font-size:20px; font-weight:400; color:#333; }
     .comment { border-top:1px solid #e0e0e0; padding:14px 0; }
+    .help-link { margin:-8px 0 15px; }
     .comment:first-child { border-top:0; padding-top:0; }
     .comment-meta { display:flex; align-items:center; gap:8px; margin-bottom:5px; font-size:11px; color:#999; }
     .comment-user { color:#555; font-weight:bold; }
@@ -64,8 +66,8 @@
   <main class="page">
     <article id="article">Loading...</article>
     <section class="comments-section" id="comments">
-      <h2>Comments</h2>
-      <div id="commentsList"></div>
+<h2>Comments</h2>
+<div class="help-link"><a id="commentsFeedLink" href="#" style="color:#4285f4;text-decoration:none;font-size:12px;">RSS feed for comments</a></div>      <div id="commentsList"></div>
       <div id="commentFormArea"></div>
     </section>
   </main>
@@ -114,9 +116,15 @@
         return;
       }
       document.title = 'Daniblog — ' + article.title;
+      
       document.getElementById('article').innerHTML = `<h1>${escapeHtml(article.title)}</h1><div class="description">${escapeHtml(article.description)}</div><div class="article-meta">By ${escapeHtml(article.author_username || "Unknown")} · ${new Date(article.created_at + 'Z').toLocaleString()}</div><div class="content">${marked.parse(article.content)}</div>`;
     }
-
+const feedLink = document.createElement('link');
+feedLink.rel = 'alternate';
+feedLink.type = 'application/rss+xml';
+feedLink.title = 'Comments on ' + article.title;
+feedLink.href = '/articles/' + encodeURIComponent(id) + '/rss.xml';
+document.head.appendChild(feedLink);
     let currentSession = { loggedIn:false, user:null };
     const visibleReplyCounts = new Map();
     let loadedComments = [];
@@ -139,7 +147,7 @@
         area.innerHTML = `<form class="comment-form" onsubmit="postComment(event, null)"><textarea id="commentText" maxlength="5000" placeholder="Write a comment..." required></textarea><button type="submit">Post Comment</button></form>`;
       } else area.innerHTML = '<p class="comment-login-note">Log in to add a comment.</p>';
     }
-
+document.getElementById('commentsFeedLink').href = '/articles/' + encodeURIComponent(id) + '/rss.xml';
     function renderComment(c, allComments) {
       const replies = allComments.filter(r => Number(r.parent_id) === Number(c.id));
       const count = replies.length;
