@@ -572,7 +572,87 @@ app.get("/rss.xml", async (req, res, next) => {
     next(e);
   }
 });
+/* =========================================================
+   ARTICLE COMMENTS RSS FEED
+   ========================================================= */
 
+app.get("/articles/:id/rss.xml", async (req, res, next) => {
+  try {
+    const articleId = Number(req.params.id);
+
+    const article = await get(
+      "SELECT id, title FROM articles WHERE id = ? AND status = 'published'",
+      [articleId]
+    );
+
+    if (!article) {
+      return res.status(404).json({ error: "Article not found." });
+    }
+
+    const siteUrl = (
+      process.env.SITE_URL ||
+      `${req.protocol}://${req.get("host")}`
+    ).replace(/\/+$/, "");
+
+    const articleUrl = `${siteUrl}/article.html?id=${article.id}`;
+
+    const result = await rows(`
+      SELECT
+        c.id,
+        c.parent_id,
+        c.content,
+        c.created_at,
+        u.username,
+        reply_user.username AS reply_to_username
+      FROM comments c
+      JOIN users u ON u.id = c.user_id
+      LEFT JOIN users reply_user ON reply_user.id = c.reply_to_user_id
+      WHERE c.article_id = ?
+      ORDER BY datetime(c.created_at) DESC, c.id DESC
+      LIMIT 50
+    `, [articleId]);
+
+    const lastBuild = result.length
+      ? rssDate(result[0].created_at)
+      : new Date().toUTCString();
+
+    const items = result.map(c => {
+      const kind = c.parent_id ? "Reply" : "Comment";
+      const mention = c.reply_to_username ? `@${c.reply_to_username} ` : "";
+
+      return `
+    <item>
+      <title>${escapeXml(`${kind} by ${c.username}`)}</title>
+      <link>${escapeXml(articleUrl)}</link>
+      <guid isPermaLink="false">${escapeXml(`${articleUrl}#comment-${c.id}`)}</guid>
+      <description>${escapeXml(mention + c.content)}</description>
+      <dc:creator>${escapeXml(c.username)}</dc:creator>
+      <pubDate>${rssDate(c.created_at)}</pubDate>
+    </item>`;
+    }).join("");
+
+    const xml = `<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0"
+  xmlns:atom="http://www.w3.org/2005/Atom"
+  xmlns:dc="http://purl.org/dc/elements/1.1/">
+  <channel>
+    <title>${escapeXml(`Comments on ${article.title}`)} | Daniblog</title>
+    <link>${escapeXml(articleUrl)}</link>
+    <description>${escapeXml(`New comments and replies on "${article.title}".`)}</description>
+    <language>en</language>
+    <lastBuildDate>${lastBuild}</lastBuildDate>
+    <atom:link href="${escapeXml(`${siteUrl}/articles/${article.id}/rss.xml`)}" rel="self" type="application/rss+xml" />${items}
+  </channel>
+</rss>`;
+
+    res
+      .type("application/rss+xml; charset=utf-8")
+      .set("Cache-Control", "public, max-age=60")
+      .send(xml);
+  } catch (e) {
+    next(e);
+  }
+});
 /* =========================================================
    COMMENTS
    ========================================================= */
