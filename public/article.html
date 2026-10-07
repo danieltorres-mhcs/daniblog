@@ -85,7 +85,11 @@
     function escapeHtml(value) {
       return String(value).replace(/[&<>"']/g, ch => ({"&":"&amp;", "<":"&lt;", ">":"&gt;", '"':"&quot;", "'":"&#039;"}[ch]));
     }
+const feedId = new URLSearchParams(location.search).get('id');
+const feedUrl = '/articles/' + encodeURIComponent(feedId) + '/rss.xml';
 
+feedLink.href = feedUrl;
+document.getElementById('commentsFeedLink').href = feedUrl;
     const dialogOverlay = document.getElementById('dialogOverlay');
     function closeDialog() { dialogOverlay.classList.remove('open'); }
     document.getElementById('dialogClose').onclick = closeDialog;
@@ -162,8 +166,7 @@ feedLink.href = '/articles/' + encodeURIComponent(new URLSearchParams(location.s
         area.innerHTML = `<form class="comment-form" onsubmit="postComment(event, null)"><textarea id="commentText" maxlength="5000" placeholder="Write a comment..." required></textarea><button type="submit">Post Comment</button></form>`;
       } else area.innerHTML = '<p class="comment-login-note">Log in to add a comment.</p>';
     }
-document.getElementById('commentsFeedLink').href = '/articles/' + encodeURIComponent(id) + '/rss.xml';
-    function renderComment(c, allComments) {
+document.getElementById('commentsFeedLink').href = '/articles/' + encodeURIComponent(new URLSearchParams(location.search).get('id')) + '/rss.xml';    function renderComment(c, allComments) {
       const replies = allComments.filter(r => Number(r.parent_id) === Number(c.id));
       const count = replies.length;
       const visible = Math.min(visibleReplyCounts.get(c.id) || 0, count);
