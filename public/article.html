@@ -106,19 +106,30 @@
       });
       dialogOverlay.classList.add('open');
     }
+async function load() {
+  const id = new URLSearchParams(location.search).get('id');
+  const res = await fetch('/api/articles/' + encodeURIComponent(id));
+  const article = await res.json();
+  if (!res.ok) {
+    document.getElementById('article').textContent = article.error || 'Article not found.';
+    return;
+  }
+  document.title = 'Daniblog — ' + article.title;
 
-    async function load() {
-      const id = new URLSearchParams(location.search).get('id');
-      const res = await fetch('/api/articles/' + encodeURIComponent(id));
-      const article = await res.json();
-      if (!res.ok) {
-        document.getElementById('article').textContent = article.error || 'Article not found.';
-        return;
-      }
-      document.title = 'Daniblog — ' + article.title;
-      
-      document.getElementById('article').innerHTML = `<h1>${escapeHtml(article.title)}</h1><div class="description">${escapeHtml(article.description)}</div><div class="article-meta">By ${escapeHtml(article.author_username || "Unknown")} · ${new Date(article.created_at + 'Z').toLocaleString()}</div><div class="content">${marked.parse(article.content)}</div>`;
-    }
+  const feedUrl = '/articles/' + encodeURIComponent(id) + '/rss.xml';
+
+  const feedLink = document.createElement('link');
+  feedLink.rel = 'alternate';
+  feedLink.type = 'application/rss+xml';
+  feedLink.title = 'Comments on ' + article.title;
+  feedLink.href = feedUrl;
+  document.head.appendChild(feedLink);
+
+  const visibleFeedLink = document.getElementById('commentsFeedLink');
+  if (visibleFeedLink) visibleFeedLink.href = feedUrl;
+
+  document.getElementById('article').innerHTML = `<h1>${escapeHtml(article.title)}</h1><div class="description">${escapeHtml(article.description)}</div><div class="article-meta">By ${escapeHtml(article.author_username || "Unknown")} · ${new Date(article.created_at + 'Z').toLocaleString()}</div><div class="content">${marked.parse(article.content)}</div>`;
+}
 try {
   const feedLink = document.createElement('link');
   feedLink.rel = 'alternate';
