@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <link rel="icon" type="image/png" href="https://github.com/danieltorres-mhcs/assets/blob/main/Untitled27_20260914211220.png?raw=true">
   <link rel="alternate" type="application/rss+xml" title="Daniblog RSS" href="/rss.xml">
-  
+
   <title>Daniblog — Article</title>
   <style>
     body { margin:0; background:#f5f5f5; color:#424242; font-family:Arial,Roboto,Helvetica,sans-serif; line-height:1.6; }
@@ -66,8 +66,9 @@
   <main class="page">
     <article id="article">Loading...</article>
     <section class="comments-section" id="comments">
-<h2>Comments</h2>
-<div class="help-link"><a id="commentsFeedLink" href="#" style="color:#4285f4;text-decoration:none;font-size:12px;">RSS feed for comments</a></div>      <div id="commentsList"></div>
+      <h2>Comments</h2>
+      <div class="help-link"><a id="commentsFeedLink" href="#" style="color:#4285f4;text-decoration:none;font-size:12px;">RSS feed for comments</a></div>
+      <div id="commentsList"></div>
       <div id="commentFormArea"></div>
     </section>
   </main>
@@ -86,26 +87,27 @@
       return String(value).replace(/[&<>"']/g, ch => ({"&":"&amp;", "<":"&lt;", ">":"&gt;", '"':"&quot;", "'":"&#039;"}[ch]));
     }
 
-(function addCommentsFeed() {
-  try {
-    const feedId = new URLSearchParams(location.search).get('id');
-    if (!feedId) return;
+    (function addCommentsFeed() {
+      try {
+        const feedId = new URLSearchParams(location.search).get('id');
+        if (!feedId) return;
 
-    const feedUrl = '/articles/' + encodeURIComponent(feedId) + '/rss.xml';
+        const feedUrl = '/articles/' + encodeURIComponent(feedId) + '/rss.xml';
 
-    const feedLink = document.createElement('link');
-    feedLink.rel = 'alternate';
-    feedLink.type = 'application/rss+xml';
-    feedLink.title = 'Comments on this article';
-    feedLink.href = feedUrl;
-    document.head.appendChild(feedLink);
+        const feedLink = document.createElement('link');
+        feedLink.rel = 'alternate';
+        feedLink.type = 'application/rss+xml';
+        feedLink.title = 'Comments on this article';
+        feedLink.href = feedUrl;
+        document.head.appendChild(feedLink);
 
-    const visibleLink = document.getElementById('commentsFeedLink');
-    if (visibleLink) visibleLink.href = feedUrl;
-  } catch (err) {
-    console.error('Feed link failed', err);
-  }
-})();
+        const visibleLink = document.getElementById('commentsFeedLink');
+        if (visibleLink) visibleLink.href = feedUrl;
+      } catch (err) {
+        console.error('Feed link failed', err);
+      }
+    })();
+
     const dialogOverlay = document.getElementById('dialogOverlay');
     function closeDialog() { dialogOverlay.classList.remove('open'); }
     document.getElementById('dialogClose').onclick = closeDialog;
@@ -126,19 +128,19 @@
       });
       dialogOverlay.classList.add('open');
     }
-async function load() {
-  const id = new URLSearchParams(location.search).get('id');
-  const res = await fetch('/api/articles/' + encodeURIComponent(id));
-  const article = await res.json();
-  if (!res.ok) {
-    document.getElementById('article').textContent = article.error || 'Article not found.';
-    return;
-  }
-  document.title = 'Daniblog — ' + article.title;
 
-  document.getElementById('article').innerHTML = `<h1>${escapeHtml(article.title)}</h1><div class="description">${escapeHtml(article.description)}</div><div class="article-meta">By ${escapeHtml(article.author_username || "Unknown")} · ${new Date(article.created_at + 'Z').toLocaleString()}</div><div class="content">${marked.parse(article.content)}</div>`;
-}
-    
+    async function load() {
+      const id = new URLSearchParams(location.search).get('id');
+      const res = await fetch('/api/articles/' + encodeURIComponent(id));
+      const article = await res.json();
+      if (!res.ok) {
+        document.getElementById('article').textContent = article.error || 'Article not found.';
+        return;
+      }
+      document.title = 'Daniblog — ' + article.title;
+      document.getElementById('article').innerHTML = `<h1>${escapeHtml(article.title)}</h1><div class="description">${escapeHtml(article.description)}</div><div class="article-meta">By ${escapeHtml(article.author_username || "Unknown")} · ${new Date(article.created_at + 'Z').toLocaleString()}</div><div class="content">${marked.parse(article.content)}</div>`;
+    }
+
     let currentSession = { loggedIn:false, user:null };
     const visibleReplyCounts = new Map();
     let loadedComments = [];
@@ -161,6 +163,8 @@ async function load() {
         area.innerHTML = `<form class="comment-form" onsubmit="postComment(event, null)"><textarea id="commentText" maxlength="5000" placeholder="Write a comment..." required></textarea><button type="submit">Post Comment</button></form>`;
       } else area.innerHTML = '<p class="comment-login-note">Log in to add a comment.</p>';
     }
+
+    function renderComment(c, allComments) {
       const replies = allComments.filter(r => Number(r.parent_id) === Number(c.id));
       const count = replies.length;
       const visible = Math.min(visibleReplyCounts.get(c.id) || 0, count);
