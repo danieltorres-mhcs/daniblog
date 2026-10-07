@@ -119,12 +119,17 @@
       
       document.getElementById('article').innerHTML = `<h1>${escapeHtml(article.title)}</h1><div class="description">${escapeHtml(article.description)}</div><div class="article-meta">By ${escapeHtml(article.author_username || "Unknown")} · ${new Date(article.created_at + 'Z').toLocaleString()}</div><div class="content">${marked.parse(article.content)}</div>`;
     }
-const feedLink = document.createElement('link');
-feedLink.rel = 'alternate';
-feedLink.type = 'application/rss+xml';
-feedLink.title = 'Comments on ' + article.title;
-feedLink.href = '/articles/' + encodeURIComponent(id) + '/rss.xml';
-document.head.appendChild(feedLink);
+try {
+  const feedLink = document.createElement('link');
+  feedLink.rel = 'alternate';
+  feedLink.type = 'application/rss+xml';
+  feedLink.title = 'Comments on ' + article.title;
+  feedLink.href = '/articles/' + encodeURIComponent(id) + '/rss.xml';
+  document.head.appendChild(feedLink);
+} catch (err) {
+  console.error('Feed link failed', err);
+}
+    
     let currentSession = { loggedIn:false, user:null };
     const visibleReplyCounts = new Map();
     let loadedComments = [];
