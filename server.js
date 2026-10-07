@@ -492,6 +492,86 @@ app.get("/api/articles/:id", async (req, res, next) => {
   }
 });
 
+/* =========================================================
+   RSS FEED
+   ========================================================= */
+
+function escapeXml(value) {
+  return String(value ?? "").replace(/[&<>"']/g, ch => ({
+    "&": "&amp;",
+    "<": "&lt;",
+    ">": "&gt;",
+    '"': "&quot;",
+    "'": "&apos;"
+  }[ch]));
+}
+
+function rssDate(value) {
+  // Turso stores CURRENT_TIMESTAMP as "YYYY-MM-DD HH:MM:SS" in UTC
+  return new Date(String(value).replace(" ", "T") + "Z").toUTCString();
+}
+
+app.get("/rss.xml", async (req, res, next) => {
+  try {
+    const siteUrl = (
+      process.env.SITE_URL ||
+      `${req.protocol}://${req.get("host")}`
+    ).replace(/\/+$/, "");
+
+    const result = await rows(`
+      SELECT
+        a.id,
+        a.title,
+        a.description,
+        a.created_at,
+        u.username AS author_username
+      FROM articles a
+      LEFT JOIN users u ON u.id = a.author_id
+      WHERE a.status = 'published'
+      ORDER BY datetime(a.created_at) DESC, a.id DESC
+      LIMIT 20
+    `);
+
+    const lastBuild = result.length
+      ? rssDate(result[0].created_at)
+      : new Date().toUTCString();
+
+    const items = result.map(article => {
+      const link = `${siteUrl}/article.html?id=${article.id}`;
+
+      return `
+    <item>
+      <title>${escapeXml(article.title)}</title>
+      <link>${escapeXml(link)}</link>
+      <guid isPermaLink="true">${escapeXml(link)}</guid>
+      <description>${escapeXml(article.description)}</description>
+      <dc:creator>${escapeXml(article.author_username || "Unknown")}</dc:creator>
+      <pubDate>${rssDate(article.created_at)}</pubDate>
+    </item>`;
+    }).join("");
+
+    const xml = `<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0"
+  xmlns:atom="http://www.w3.org/2005/Atom"
+  xmlns:dc="http://purl.org/dc/elements/1.1/">
+  <channel>
+    <title>Daniblog</title>
+    <link>${escapeXml(siteUrl)}/</link>
+    <description>Blog site for news, thoughts, and opinions.</description>
+    <language>en</language>
+    <lastBuildDate>${lastBuild}</lastBuildDate>
+    <atom:link href="${escapeXml(siteUrl)}/rss.xml" rel="self" type="application/rss+xml" />${items}
+  </channel>
+</rss>`;
+
+    res
+      .type("application/rss+xml; charset=utf-8")
+      .set("Cache-Control", "public, max-age=300")
+      .send(xml);
+  } catch (e) {
+    next(e);
+  }
+});
 
 /* =========================================================
    COMMENTS
