@@ -5,6 +5,7 @@ import bcrypt from "bcryptjs";
 import { createClient } from "@libsql/client";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { marked } from "marked";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const app = express();
@@ -505,7 +506,14 @@ function escapeXml(value) {
     "'": "&apos;"
   }[ch]));
 }
+function renderMarkdown(md) {
+  return marked.parse(String(md ?? ""), { async: false });
+}
 
+function cdata(html) {
+  // Splits any "]]>" in the content so it can't end the CDATA block early
+  return `<![CDATA[${String(html).replace(/]]>/g, "]]]]><![CDATA[>")}]]>`;
+}
 function rssDate(value) {
   // Turso stores CURRENT_TIMESTAMP as "YYYY-MM-DD HH:MM:SS" in UTC
   return new Date(String(value).replace(" ", "T") + "Z").toUTCString();
@@ -523,6 +531,7 @@ app.get("/rss.xml", async (req, res, next) => {
         a.id,
         a.title,
         a.description,
+        a.content,
         a.created_at,
         u.username AS author_username
       FROM articles a
@@ -535,7 +544,16 @@ app.get("/rss.xml", async (req, res, next) => {
     const lastBuild = result.length
       ? rssDate(result[0].created_at)
       : new Date().toUTCString();
-
+    const articleItem = `
+    <item>
+      <title>${escapeXml(article.title)}</title>
+      <link>${escapeXml(articleUrl)}</link>
+      <guid isPermaLink="true">${escapeXml(articleUrl)}</guid>
+      <description>${escapeXml(article.description)}</description>
+      <content:encoded>${cdata(renderMarkdown(article.content))}</content:encoded>
+      <dc:creator>${escapeXml(article.author_username || "Unknown")}</dc:creator>
+      <pubDate>${rssDate(article.created_at)}</pubDate>
+    </item>`;
     const items = result.map(article => {
       const link = `${siteUrl}/article.html?id=${article.id}`;
 
@@ -553,14 +571,16 @@ app.get("/rss.xml", async (req, res, next) => {
     const xml = `<?xml version="1.0" encoding="UTF-8"?>
 <rss version="2.0"
   xmlns:atom="http://www.w3.org/2005/Atom"
-  xmlns:dc="http://purl.org/dc/elements/1.1/">
+  xmlns:dc="http://purl.org/dc/elements/1.1/"
+  xmlns:content="http://purl.org/rss/1.0/modules/content/">
   <channel>
     <title>Daniblog</title>
     <link>${escapeXml(siteUrl)}/</link>
     <description>Blog site for news, thoughts, and opinions.</description>
+    <content:encoded>${cdata(renderMarkdown(article.content))}</content:encoded>
     <language>en</language>
     <lastBuildDate>${lastBuild}</lastBuildDate>
-    <atom:link href="${escapeXml(siteUrl)}/rss.xml" rel="self" type="application/rss+xml" />${items}
+    <atom:link href="${escapeXml(siteUrl)}/rss.xml" rel="self" type="application/rss+xml" />${articleItem}${items}
   </channel>
 </rss>`;
 
@@ -614,7 +634,7 @@ app.get("/articles/:id/rss.xml", async (req, res, next) => {
 
     const lastBuild = result.length
       ? rssDate(result[0].created_at)
-      : new Date().toUTCString();
+      : rssDate(article.created_at);
 
     const items = result.map(c => {
       const kind = c.parent_id ? "Reply" : "Comment";
@@ -661,10 +681,18 @@ app.get("/api/articles/:id/comments", async (req, res, next) => {
   try {
     const articleId = Number(req.params.id);
 
-    const article = await get(
-      "SELECT id FROM articles WHERE id = ? AND status = 'published'",
-      [articleId]
-    );
+        const article = await get(`
+      SELECT
+        a.id,
+        a.title,
+        a.description,
+        a.content,
+        a.created_at,
+        u.username AS author_username
+      FROM articles a
+      LEFT JOIN users u ON u.id = a.author_id
+      WHERE a.id = ? AND a.status = 'published'
+    `, [articleId]);
 
     if (!article) {
       return res.status(404).json({
