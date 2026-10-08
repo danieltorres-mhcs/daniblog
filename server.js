@@ -493,8 +493,9 @@ app.get("/api/articles/:id", async (req, res, next) => {
   }
 });
 
+
 /* =========================================================
-   RSS FEED
+   RSS HELPERS
    ========================================================= */
 
 function escapeXml(value) {
@@ -506,6 +507,7 @@ function escapeXml(value) {
     "'": "&apos;"
   }[ch]));
 }
+
 function renderMarkdown(md) {
   return marked.parse(String(md ?? ""), { async: false });
 }
@@ -514,10 +516,16 @@ function cdata(html) {
   // Splits any "]]>" in the content so it can't end the CDATA block early
   return `<![CDATA[${String(html).replace(/]]>/g, "]]]]><![CDATA[>")}]]>`;
 }
+
 function rssDate(value) {
   // Turso stores CURRENT_TIMESTAMP as "YYYY-MM-DD HH:MM:SS" in UTC
   return new Date(String(value).replace(" ", "T") + "Z").toUTCString();
 }
+
+
+/* =========================================================
+   RSS FEED (all published articles, with full content)
+   ========================================================= */
 
 app.get("/rss.xml", async (req, res, next) => {
   try {
@@ -544,16 +552,7 @@ app.get("/rss.xml", async (req, res, next) => {
     const lastBuild = result.length
       ? rssDate(result[0].created_at)
       : new Date().toUTCString();
-    const articleItem = `
-    <item>
-      <title>${escapeXml(article.title)}</title>
-      <link>${escapeXml(articleUrl)}</link>
-      <guid isPermaLink="true">${escapeXml(articleUrl)}</guid>
-      <description>${escapeXml(article.description)}</description>
-      <content:encoded>${cdata(renderMarkdown(article.content))}</content:encoded>
-      <dc:creator>${escapeXml(article.author_username || "Unknown")}</dc:creator>
-      <pubDate>${rssDate(article.created_at)}</pubDate>
-    </item>`;
+
     const items = result.map(article => {
       const link = `${siteUrl}/article.html?id=${article.id}`;
 
@@ -563,6 +562,7 @@ app.get("/rss.xml", async (req, res, next) => {
       <link>${escapeXml(link)}</link>
       <guid isPermaLink="true">${escapeXml(link)}</guid>
       <description>${escapeXml(article.description)}</description>
+      <content:encoded>${cdata(renderMarkdown(article.content))}</content:encoded>
       <dc:creator>${escapeXml(article.author_username || "Unknown")}</dc:creator>
       <pubDate>${rssDate(article.created_at)}</pubDate>
     </item>`;
@@ -577,10 +577,9 @@ app.get("/rss.xml", async (req, res, next) => {
     <title>Daniblog</title>
     <link>${escapeXml(siteUrl)}/</link>
     <description>Blog site for news, thoughts, and opinions.</description>
-    <content:encoded>${cdata(renderMarkdown(article.content))}</content:encoded>
     <language>en</language>
     <lastBuildDate>${lastBuild}</lastBuildDate>
-    <atom:link href="${escapeXml(siteUrl)}/rss.xml" rel="self" type="application/rss+xml" />${articleItem}${items}
+    <atom:link href="${escapeXml(siteUrl)}/rss.xml" rel="self" type="application/rss+xml" />${items}
   </channel>
 </rss>`;
 
@@ -592,6 +591,8 @@ app.get("/rss.xml", async (req, res, next) => {
     next(e);
   }
 });
+
+
 /* =========================================================
    ARTICLE COMMENTS RSS FEED
    ========================================================= */
@@ -601,7 +602,7 @@ app.get("/articles/:id/rss.xml", async (req, res, next) => {
     const articleId = Number(req.params.id);
 
     const article = await get(
-      "SELECT id, title FROM articles WHERE id = ? AND status = 'published'",
+      "SELECT id, title, created_at FROM articles WHERE id = ? AND status = 'published'",
       [articleId]
     );
 
@@ -673,6 +674,8 @@ app.get("/articles/:id/rss.xml", async (req, res, next) => {
     next(e);
   }
 });
+
+
 /* =========================================================
    COMMENTS
    ========================================================= */
@@ -681,18 +684,10 @@ app.get("/api/articles/:id/comments", async (req, res, next) => {
   try {
     const articleId = Number(req.params.id);
 
-        const article = await get(`
-      SELECT
-        a.id,
-        a.title,
-        a.description,
-        a.content,
-        a.created_at,
-        u.username AS author_username
-      FROM articles a
-      LEFT JOIN users u ON u.id = a.author_id
-      WHERE a.id = ? AND a.status = 'published'
-    `, [articleId]);
+    const article = await get(
+      "SELECT id FROM articles WHERE id = ? AND status = 'published'",
+      [articleId]
+    );
 
     if (!article) {
       return res.status(404).json({
