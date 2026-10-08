@@ -594,17 +594,33 @@ app.get("/rss.xml", async (req, res, next) => {
 
 
 /* =========================================================
-   ARTICLE COMMENTS RSS FEED
+   ARTICLE RSS FEED (the article itself + its comments)
    ========================================================= */
+
+function htmlText(value) {
+  return String(value ?? "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/\r?\n/g, "<br>");
+}
 
 app.get("/articles/:id/rss.xml", async (req, res, next) => {
   try {
     const articleId = Number(req.params.id);
 
-    const article = await get(
-      "SELECT id, title, created_at FROM articles WHERE id = ? AND status = 'published'",
-      [articleId]
-    );
+    const article = await get(`
+      SELECT
+        a.id,
+        a.title,
+        a.description,
+        a.content,
+        a.created_at,
+        u.username AS author_username
+      FROM articles a
+      LEFT JOIN users u ON u.id = a.author_id
+      WHERE a.id = ? AND a.status = 'published'
+    `, [articleId]);
 
     if (!article) {
       return res.status(404).json({ error: "Article not found." });
@@ -637,16 +653,29 @@ app.get("/articles/:id/rss.xml", async (req, res, next) => {
       ? rssDate(result[0].created_at)
       : rssDate(article.created_at);
 
+    const articleItem = `
+    <item>
+      <title>${escapeXml(article.title)}</title>
+      <link>${escapeXml(articleUrl)}</link>
+      <guid isPermaLink="true">${escapeXml(articleUrl)}</guid>
+      <description>${escapeXml(article.description)}</description>
+      <content:encoded>${cdata(renderMarkdown(article.content))}</content:encoded>
+      <dc:creator>${escapeXml(article.author_username || "Unknown")}</dc:creator>
+      <pubDate>${rssDate(article.created_at)}</pubDate>
+    </item>`;
+
     const items = result.map(c => {
       const kind = c.parent_id ? "Reply" : "Comment";
       const mention = c.reply_to_username ? `@${c.reply_to_username} ` : "";
+      const text = mention + c.content;
 
       return `
     <item>
       <title>${escapeXml(`${kind} by ${c.username}`)}</title>
       <link>${escapeXml(articleUrl)}</link>
       <guid isPermaLink="false">${escapeXml(`${articleUrl}#comment-${c.id}`)}</guid>
-      <description>${escapeXml(mention + c.content)}</description>
+      <description>${escapeXml(text)}</description>
+      <content:encoded>${cdata(`<p>${htmlText(text)}</p>`)}</content:encoded>
       <dc:creator>${escapeXml(c.username)}</dc:creator>
       <pubDate>${rssDate(c.created_at)}</pubDate>
     </item>`;
@@ -655,14 +684,15 @@ app.get("/articles/:id/rss.xml", async (req, res, next) => {
     const xml = `<?xml version="1.0" encoding="UTF-8"?>
 <rss version="2.0"
   xmlns:atom="http://www.w3.org/2005/Atom"
-  xmlns:dc="http://purl.org/dc/elements/1.1/">
+  xmlns:dc="http://purl.org/dc/elements/1.1/"
+  xmlns:content="http://purl.org/rss/1.0/modules/content/">
   <channel>
-    <title>${escapeXml(`Comments on ${article.title}`)} | Daniblog</title>
+    <title>${escapeXml(article.title)} | Daniblog</title>
     <link>${escapeXml(articleUrl)}</link>
-    <description>${escapeXml(`New comments and replies on "${article.title}".`)}</description>
+    <description>${escapeXml(`The article "${article.title}" and its comments.`)}</description>
     <language>en</language>
     <lastBuildDate>${lastBuild}</lastBuildDate>
-    <atom:link href="${escapeXml(`${siteUrl}/articles/${article.id}/rss.xml`)}" rel="self" type="application/rss+xml" />${items}
+    <atom:link href="${escapeXml(`${siteUrl}/articles/${article.id}/rss.xml`)}" rel="self" type="application/rss+xml" />${articleItem}${items}
   </channel>
 </rss>`;
 
